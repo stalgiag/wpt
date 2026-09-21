@@ -1,0 +1,35 @@
+name: port-probe
+on:
+  push:
+    branches: [port-probe]
+  workflow_dispatch:
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: try to bind the candidate bad ports
+        shell: python
+        run: |
+          import socket
+          for port in (10080, 6566, 6679, 4190):
+              s = socket.socket()
+              try:
+                  s.bind(("127.0.0.1", port)); s.listen(1)
+                  print(f"{port}: bind OK")
+              except OSError as e:
+                  print(f"{port}: bind FAILED: {e}")
+              finally:
+                  s.close()
+      - name: what already listens (unix)
+        if: runner.os != 'Windows'
+        run: (ss -ltnp 2>/dev/null || netstat -an | grep LISTEN) | head -40
+      - name: what already listens and which ranges are reserved (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          netstat -an | Select-String LISTENING | Select-Object -First 40
+          netsh interface ipv4 show excludedportrange protocol=tcp
